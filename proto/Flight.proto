@@ -1,0 +1,131 @@
+// Arrow Flight Protocol Buffer definition
+// Based on Apache Arrow Flight specification
+
+syntax = "proto3";
+
+package arrow.flight.protocol;
+
+option java_package = "org.apache.arrow.flight.impl";
+
+// Flight service definition
+service FlightService {
+  // Handshake for auth
+  rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse) {}
+  
+  // List available datasets
+  rpc ListFlights(Criteria) returns (stream FlightInfo) {}
+  
+  // Get metadata about a dataset
+  rpc GetFlightInfo(FlightDescriptor) returns (FlightInfo) {}
+  
+  // Get schema only
+  rpc GetSchema(FlightDescriptor) returns (SchemaResult) {}
+  
+  // Get data stream
+  rpc DoGet(Ticket) returns (stream FlightData) {}
+  
+  // Send data stream
+  rpc DoPut(stream FlightData) returns (stream PutResult) {}
+  
+  // Bidirectional data exchange
+  rpc DoExchange(stream FlightData) returns (stream FlightData) {}
+  
+  // Execute action
+  rpc DoAction(Action) returns (stream Result) {}
+  
+  // List available actions
+  rpc ListActions(Empty) returns (stream ActionType) {}
+}
+
+// Empty message
+message Empty {}
+
+// Action type description
+message ActionType {
+  string type = 1;
+  string description = 2;
+}
+
+// Criteria for listing flights
+message Criteria {
+  bytes expression = 1;
+}
+
+// Action request
+message Action {
+  string type = 1;
+  bytes body = 2;
+}
+
+// Result of action
+message Result {
+  bytes body = 1;
+}
+
+// Schema result
+message SchemaResult {
+  bytes schema = 1;
+}
+
+// Flight descriptor - identifies a dataset
+message FlightDescriptor {
+  enum DescriptorType {
+    UNKNOWN = 0;
+    PATH = 1;
+    CMD = 2;
+  }
+  
+  DescriptorType type = 1;
+  bytes cmd = 2;
+  repeated bytes path = 3;
+}
+
+// Flight info - metadata about a dataset
+message FlightInfo {
+  bytes schema = 1;
+  FlightDescriptor flight_descriptor = 2;
+  repeated FlightEndpoint endpoint = 3;
+  int64 total_records = 4;
+  int64 total_bytes = 5;
+}
+
+// Flight endpoint - where to get data
+message FlightEndpoint {
+  Ticket ticket = 1;
+  repeated Location location = 2;
+}
+
+// Location of a Flight service
+message Location {
+  string uri = 1;
+}
+
+// Ticket to get data
+message Ticket {
+  bytes ticket = 1;
+}
+
+// Flight data - actual data being transferred
+message FlightData {
+  FlightDescriptor flight_descriptor = 1;
+  bytes data_header = 2;
+  bytes app_metadata = 3;
+  bytes data_body = 1000;
+}
+
+// Put result
+message PutResult {
+  bytes app_metadata = 1;
+}
+
+// Handshake request
+message HandshakeRequest {
+  uint64 protocol_version = 1;
+  bytes payload = 2;
+}
+
+// Handshake response
+message HandshakeResponse {
+  uint64 protocol_version = 1;
+  bytes payload = 2;
+}
