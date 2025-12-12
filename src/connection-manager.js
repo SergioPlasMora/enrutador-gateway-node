@@ -12,6 +12,12 @@ class ConnectionManager {
         this._rrIndex = new Map();
         // request_id -> { ws, resolve, reject, chunks: [] }
         this._pendingRequests = new Map();
+        // ws -> active stream count (semaphore)
+        this._activeStreams = new Map();
+        // Max concurrent streams per websocket
+        this._maxConcurrentStreams = 3;
+        // Queue for pending stream requests
+        this._streamQueue = [];
     }
 
     /**
@@ -119,10 +125,21 @@ class ConnectionManager {
 
     /**
      * Envía request y devuelve un async generator de chunks binarios (para DoGet)
+     * IMPORTANTE: Serializa streams por WebSocket para evitar confusión de chunks
      */
     async *sendStreamRequest(tenantId, action, data = {}) {
         const requestId = uuidv4();
         const ws = this.getNextConnection(tenantId);
+        
+        // Esperar si ya hay un stream activo en este WebSocket
+        while (this._activeStreams.get(ws)) {
+            await new Promise(r => setTimeout(r, 10));
+        }
+        
+        // Marcar como activo
+        this._activeStreams.set(ws, requestId);
+        
+        console.log(`[ConnectionManager] sendStreamRequest: tenantId=${tenantId}, action=${action}, requestId=${requestId}`);
         
         // Cola de chunks con control de flujo
         const chunkQueue = [];
@@ -148,6 +165,7 @@ class ConnectionManager {
                 }
             },
             onError: (err) => {
+                console.error(`[ConnectionManager] Stream error for ${requestId}:`, err);
                 streamError = err;
                 if (resolveWait) {
                     resolveWait();
@@ -181,6 +199,7 @@ class ConnectionManager {
             }
         } finally {
             this._pendingRequests.delete(requestId);
+            this._activeStreams.delete(ws);
         }
     }
 

@@ -125,15 +125,20 @@ async function doGet(call) {
         // Obtener stream del Connector
         const ticketB64 = Buffer.from(JSON.stringify(ticketData)).toString('base64');
         
+        let chunkCount = 0;
         for await (const chunk of manager.sendStreamRequest(tenantId, 'do_get', { ticket: ticketB64 })) {
             // El chunk es un Arrow IPC stream completo (bytes crudos)
-            // Lo enviamos directamente en data_body
-            // El cliente Arrow Flight lo recibirá y lo parseará con pa.ipc.open_stream()
-            call.write({
-                data_body: chunk
-            });
+            // Arrow Flight protocol requiere data_header (puede estar vacío) y data_body
+            const flightData = {
+                data_header: Buffer.alloc(0),  // Metadata vacía pero presente
+                data_body: chunk  // Los datos Arrow IPC
+            };
+            call.write(flightData);
+            chunkCount++;
+            console.log(`[FlightServer] Sent FlightData chunk ${chunkCount}, size=${chunk.length}`);
         }
 
+        console.log(`[FlightServer] DoGet complete, sent ${chunkCount} chunks`);
         call.end();
 
     } catch (err) {
